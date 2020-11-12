@@ -375,4 +375,16 @@ public class QuizController {
 
         return new ResponseEntity<>(null, HttpStatus.OK);
     }
+
+    @PostMapping("{id}/rate")
+    public ResponseEntity<?> postQuizRate(@PathVariable(name = "id") Long id,
+                                          @RequestParam(name = "action") String action,
+                                          @AuthenticationPrincipal String username){
+        if (!action.equals("like") && !action.equals("dislike"))
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+
+        // TODO replacement for {id}/like {id}/dislike
+
+        return new ResponseEntity<>(HttpStatus.CREATED);
+    }
 }

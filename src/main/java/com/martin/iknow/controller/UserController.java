@@ -1,29 +1,18 @@
 package com.martin.iknow.controller;
 
 import com.martin.iknow.data.dto.UserDto;
-import com.martin.iknow.data.representation.UserRepresentationModel;
 import com.martin.iknow.data.form.SignupForm;
 import com.martin.iknow.data.model.User;
 import com.martin.iknow.data.repository.UserRepository;
-import com.martin.iknow.data.representation.UserRepresentationModelAssembler;
 import lombok.extern.slf4j.Slf4j;
-import net.minidev.json.JSONArray;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.hateoas.CollectionModel;
-import org.springframework.hateoas.EntityModel;
-import org.springframework.hateoas.Link;
-import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 
 import javax.validation.Valid;
-import java.util.List;
 
 @Slf4j
 @RestController
@@ -41,36 +30,36 @@ public class UserController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    @GetMapping
-    public CollectionModel<UserRepresentationModel> getUsers(@RequestParam(required = false, name = "page") Integer page,
-                                                             @RequestParam(required = false, name = "size") Integer size) {
-
-        if (page == null)
-            page = 0;
-        if (size == null)
-            size = defaultPageSize;
-
-        List<User> users = userRepository.findAll(PageRequest.of(page, size, Sort.by("id").ascending())).getContent();
-
-        UserRepresentationModelAssembler assembler = new UserRepresentationModelAssembler();
-        CollectionModel<UserRepresentationModel> models = assembler.toCollectionModel(users);
-
-        Link link = WebMvcLinkBuilder
-                .linkTo(UserController.class)
-                        .withRel("users");
-        models.add(link);
-
-        return models;
-    }
-
-    @GetMapping("{id}")
-    public ResponseEntity<UserRepresentationModel> getUser(@PathVariable("id") Long id){
-        User user = userRepository.findById(id).orElse(null);
-        if (user == null)
-            return new ResponseEntity<>(null, HttpStatus.NOT_FOUND);
-
-        return new ResponseEntity<>(new UserRepresentationModelAssembler().toModel(user), HttpStatus.OK);
-    }
+//    @GetMapping
+//    public CollectionModel<UserRepresentationModel> getUsers(@RequestParam(required = false, name = "page") Integer page,
+//                                                             @RequestParam(required = false, name = "size") Integer size) {
+//
+//        if (page == null)
+//            page = 0;
+//        if (size == null)
+//            size = defaultPageSize;
+//
+//        List<User> users = userRepository.findAll(PageRequest.of(page, size, Sort.by("id").ascending())).getContent();
+//
+//        UserRepresentationModelAssembler assembler = new UserRepresentationModelAssembler();
+//        CollectionModel<UserRepresentationModel> models = assembler.toCollectionModel(users);
+//
+//        Link link = WebMvcLinkBuilder
+//                .linkTo(UserController.class)
+//                        .withRel("users");
+//        models.add(link);
+//
+//        return models;
+//    }
+//
+//    @GetMapping("{id}")
+//    public ResponseEntity<UserRepresentationModel> getUser(@PathVariable("id") Long id){
+//        User user = userRepository.findById(id).orElse(null);
+//        if (user == null)
+//            return new ResponseEntity<>(null, HttpStatus.NOT_FOUND);
+//
+//        return new ResponseEntity<>(new UserRepresentationModelAssembler().toModel(user), HttpStatus.OK);
+//    }
 
     @PostMapping(consumes = "application/json")
     @ResponseStatus(HttpStatus.CREATED)
