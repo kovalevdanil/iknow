@@ -69,4 +69,21 @@ public class User implements UserDetails {
     public boolean isEnabled() {
         return true;
     }
+
+
+    @Override
+    public String toString(){
+        return "<username: " + username + "; password " + password + ">";
+    }
+
+
+    public boolean removeAttempt(Attempt attempt){
+        return attempts.remove(attempt);
+    }
+
+    public Attempt getPendingAttempt(Long quizId){
+        return attempts.stream()
+                .filter(a -> !a.getIsFinished() && a.getQuiz().getId().equals(quizId))
+                .findFirst().orElse(null);
+    }
 }

@@ -32,29 +32,4 @@ public class AnswerController {
         this.answerRepository = answerRepository;
     }
 
-    @GetMapping
-    public CollectionModel<AnswerRepresentationModel> getAnswers(@RequestParam(name = "page") Integer page,
-                                                                   @RequestParam(name = "size") Integer size){
-        if (page == null)
-            page = 0;
-        if (size == null)
-            size = 10;
-
-        List<Answer> answers =  answerRepository.findAll(PageRequest.of(page, size, Sort.by("id"))).getContent();
-        CollectionModel<AnswerRepresentationModel> models = new AnswerRepresentationModelAssembler()
-                .toCollectionModel(answers);
-
-        models.add(WebMvcLinkBuilder.linkTo(AnswerController.class).withRel("answers"));
-
-        return models;
-    }
-
-    @GetMapping("{id}")
-    public ResponseEntity<AnswerRepresentationModel> getAttempt(@PathVariable(name ="id") Long id){
-        Optional<Answer> answer = answerRepository.findById(id);
-        if (answer.isEmpty())
-            return new ResponseEntity<>(null, HttpStatus.NOT_FOUND);
-
-        return new ResponseEntity<>(new AnswerRepresentationModel(answer.get()), HttpStatus.OK);
-    }
 }

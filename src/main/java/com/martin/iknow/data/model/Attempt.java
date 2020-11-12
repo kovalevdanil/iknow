@@ -5,6 +5,7 @@ import lombok.NoArgsConstructor;
 
 import javax.persistence.*;
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Entity
@@ -23,11 +24,14 @@ public class Attempt {
     @Column(name = "finished_at")
     private Date finishedAt;
 
-    @Column(name = "points_scored")
-    private Integer pointsScored;
+//    @Column(name = "points_scored")
+//    private Integer pointsScored;
 
     @Column(name = "is_finished")
     private Boolean isFinished;
+
+    @OneToMany(mappedBy = "attempt")
+    private List<UserAnswer> answerAttempts;
 
     @ManyToOne
     @JoinColumn(name = "user_id")

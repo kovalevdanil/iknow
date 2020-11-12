@@ -16,6 +16,9 @@ public class Question {
     @Column(name = "id")
     private Long id;
 
+    @Column(name = "number")
+    private Integer number;
+
     @Column(name = "content")
     private String content;
 

@@ -14,8 +14,8 @@ public class AttemptRepresentationModel extends RepresentationModel<AttemptRepre
     private final Date startedAt;
     @Getter
     private final Date finishedAt;
-    @Getter
-    private final Integer pointsScored;
+//    @Getter
+//    private final Integer pointsScored;
     @Getter
     private final Boolean isFinished;
 
@@ -28,7 +28,7 @@ public class AttemptRepresentationModel extends RepresentationModel<AttemptRepre
     public AttemptRepresentationModel(Attempt entity){
         startedAt = entity.getStartedAt();
         finishedAt = entity.getFinishedAt();
-        pointsScored = entity.getPointsScored();
+//        pointsScored = entity.getPointsScored();
         isFinished = entity.getIsFinished();
 
         var quizAssembler = new QuizRepresentationModelAssembler();

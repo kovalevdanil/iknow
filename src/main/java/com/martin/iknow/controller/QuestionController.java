@@ -30,29 +30,4 @@ public class QuestionController {
         this.questionRepository = questionRepository;
     }
 
-    @GetMapping
-    public CollectionModel<QuestionRepresentationModel> getQuestions(@RequestParam(name = "page") Integer page,
-                                                                    @RequestParam(name = "size") Integer size){
-        if (page == null)
-            page = 0;
-        if (size == null)
-            size = 10;
-
-        List<Question> questions = questionRepository.findAll(PageRequest.of(page, size, Sort.by("id"))).getContent();
-
-        CollectionModel<QuestionRepresentationModel> models = new QuestionRepresentationModelAssembler().toCollectionModel(questions);
-        models.add(WebMvcLinkBuilder.linkTo(QuestionController.class).withRel("questions"));
-
-        return models;
-    }
-
-    @GetMapping("{id}")
-    public ResponseEntity<QuestionRepresentationModel> getQuestion(@PathVariable("id") Long id){
-
-        Optional<Question> question = questionRepository.findById(id);
-        if (question.isEmpty())
-            return new ResponseEntity<>(null, HttpStatus.NOT_FOUND);
-
-        return new ResponseEntity<>(new QuestionRepresentationModel(question.get()), HttpStatus.OK);
-    }
 }
