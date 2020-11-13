@@ -81,11 +81,22 @@ public class Quiz {
     }
 
     public boolean userAssessed(User user) {
-        return usersDisliked.stream().anyMatch(u -> u.getId().equals(user.getId())) ||
-               usersLiked.stream().anyMatch(u -> u.getId().equals(user.getId()));
+        return isLikedBy(user) || isDislikedBy(user);
     }
 
     public boolean deleteUserDisliked(User user) {
         return usersDisliked.remove(user);
+    }
+
+    public boolean isLikedBy(User user){
+        return  usersLiked.stream().anyMatch(u -> u.getId().equals(user.getId()));
+    }
+
+    public boolean isDislikedBy(User user){
+        return usersDisliked.stream().anyMatch(u -> u.getId().equals(user.getId()));
+    }
+
+    public void addUserDislike(User user) {
+        usersDisliked.add(user);
     }
 }

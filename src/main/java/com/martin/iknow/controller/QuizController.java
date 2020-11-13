@@ -1,8 +1,12 @@
 package com.martin.iknow.controller;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.ser.Serializers;
 import com.martin.iknow.data.QuizOrderByField;
+import com.martin.iknow.data.dto.QuestionDto;
 import com.martin.iknow.data.dto.QuizDto;
 import com.martin.iknow.data.dto.ThemeDto;
+import com.martin.iknow.data.form.AnswerForm;
 import com.martin.iknow.data.form.QuizForm;
 import com.martin.iknow.data.model.*;
 import com.martin.iknow.data.repository.*;
@@ -22,26 +26,29 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping(path = "/api/quizzes", produces = {"application/json"})
 @CrossOrigin
-public class QuizController {
+public class QuizController extends BaseController {
 
     private static final int DEFAULT_PAGE_SIZE = 10;
 
     private final QuizRepository quizRepository;
     private final AttemptRepository attemptRepository;
     private final AnswerRepository answerRepository;
-    private final UserRepository userRepository;
     private final QuestionRepository questionRepository;
     private final ThemeRepository themeRepository;
+    private final UserAnswerRepository userAnswerRepository;
 
 
     @Autowired
-    public QuizController(QuizRepository quizRepository, AttemptRepository attemptRepository, AnswerRepository answerRepository, UserRepository userRepository, QuestionRepository questionRepository, ThemeRepository themeRepository) {
+    public QuizController(QuizRepository quizRepository, AttemptRepository attemptRepository, AnswerRepository answerRepository, UserRepository userRepository, QuestionRepository questionRepository, ThemeRepository themeRepository, UserAnswerRepository userAnswerRepository) {
+
+        super(userRepository);
+
         this.quizRepository = quizRepository;
         this.attemptRepository = attemptRepository;
         this.answerRepository = answerRepository;
-        this.userRepository = userRepository;
         this.questionRepository = questionRepository;
         this.themeRepository = themeRepository;
+        this.userAnswerRepository = userAnswerRepository;
     }
 
     // TODO check if page or size < 0, fix orderBy
@@ -73,13 +80,9 @@ public class QuizController {
     // TODO model validation
     @PostMapping
     public ResponseEntity<QuizDto> postQuiz(@AuthenticationPrincipal String username, @RequestBody QuizForm form) {
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
-
-        User user = userRepository.findUserByUsername(username).orElse(null);
-
+        User user = getUserByUsername(username);
         if (user == null)
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(null, HttpStatus.FORBIDDEN);
 
         Quiz quiz = form.toQuiz();
         quiz.setCreatedBy(user);
@@ -182,12 +185,9 @@ public class QuizController {
     }
 
     @PostMapping("{id}/start")
-    public ResponseEntity<JSONObject> postStartQuiz(@AuthenticationPrincipal String username,
+    public ResponseEntity<JSONObject> postQuizStart(@AuthenticationPrincipal String username,
                                                     @PathVariable(name = "id") Long id) {
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
-
-        User user = userRepository.findUserByUsername(username).orElse(null);
+        User user = getUserByUsername(username);
         if (user == null)
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -215,13 +215,10 @@ public class QuizController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @DeleteMapping("{id}/terminate")
-    public ResponseEntity<JSONObject> postQuizStop(@AuthenticationPrincipal String username,
-                                                   @PathVariable(name = "id") Long id) {
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
-
-        User user = userRepository.findUserByUsername(username).orElse(null);
+    @PostMapping("{id}/terminate")
+    public ResponseEntity<JSONObject> postQuizTerminate(@AuthenticationPrincipal String username,
+                                                        @PathVariable(name = "id") Long id) {
+        User user = getUserByUsername(username);
         if (user == null)
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -243,42 +240,98 @@ public class QuizController {
         return new ResponseEntity<>(response, HttpStatus.NO_CONTENT);
     }
 
+    @GetMapping("{id}/questions")
+    public ResponseEntity<?> getQuizQuestions(@AuthenticationPrincipal String username,
+                                                              @PathVariable(name = "id") Long id){
+        User user = getUserByUsername(username);
+        if (user == null)
+            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 
-    @PostMapping("{id}")
-    public ResponseEntity<?> saveAnswer(@AuthenticationPrincipal User user,
-                                        @RequestBody Long answerId, @RequestBody Long questionId) {
-        Optional<Attempt> currentAttemptOptional = attemptRepository.findPendingAttempt(user.getId());
-        if (currentAttemptOptional.isEmpty())
-            return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+        Attempt currentAttempt = getPendingAttemptForUser(user);
+        if (currentAttempt == null){
+            JSONObject response = new JSONObject();
+            response.put("message", "you must start quiz first");
+            return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
 
-        Attempt currentAttempt = currentAttemptOptional.get();
         Quiz currentQuiz = currentAttempt.getQuiz();
-        Question question = currentQuiz.getQuestions().stream()
-                .filter(q -> q.getId().equals(questionId)).findAny().orElse(null);
 
-        if (question == null)
-            return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+        if (!currentQuiz.getId().equals(id)){
+            JSONObject response = new JSONObject();
+            response.put("message", "you have pending attempt");
+            response.put("quizId", currentAttempt.getQuiz().getId());
+            return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
 
-        Answer answer = question.getAnswers().stream().filter(a -> a.getId().equals(answerId)).findAny().orElse(null);
+        List<Question> questions = currentQuiz.getQuestions();
+        List<QuestionDto> questionsRepresentation = questions.stream().map(QuestionDto::new).collect(Collectors.toList());
 
-        if (answer == null)
-            return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(questionsRepresentation, HttpStatus.OK);
+    }
 
-        UserAnswer answerAttempt = new UserAnswer();
-        answerAttempt.setAnswer(Collections.singletonList(answer));
-        answerAttempt.setAttempt(currentAttempt);
-        answerAttempt.setQuestion(question);
 
-        return ResponseEntity.ok().build();
+    @PostMapping("{id}/answer")
+    public ResponseEntity<?> saveAnswer(@AuthenticationPrincipal String username,
+                                        @RequestBody AnswerForm form,
+                                        @PathVariable(name = "id") Long id) {
+        User user = getUserByUsername(username);
+        if (user == null)
+            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+
+        if (form.getAnswerIds() == null || form.getAnswerIds().size() == 0 || form.getQuestionId() == null){
+            JSONObject response = new JSONObject();
+            response.put("message", "invalid data format");
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        Attempt currentAttempt = getPendingAttemptForUser(user);
+        if (currentAttempt == null){
+            JSONObject response = new JSONObject();
+            response.put("message", "you should start quiz first");
+            return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
+
+        Quiz quiz = currentAttempt.getQuiz();
+        if (!quiz.getId().equals(id)){
+            JSONObject response = new JSONObject();
+            response.put("message", "you have unfinished attempt. terminate it first");
+            response.put("quizId", quiz.getId());
+            return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
+
+        Question question = quiz.getQuestions().stream().filter(q -> q.getId().equals(id)).findFirst().orElse(null);
+        if (question == null){
+            JSONObject response = new JSONObject();
+            response.put("message", "invalid question id");
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        List<Answer> answers = question.getAnswers();
+
+        List<Answer> chosenAnswers = answers.stream().filter(answer ->
+            form.getAnswerIds().stream().anyMatch(answerId -> answer.getId().equals(answerId))
+        ).collect(Collectors.toList());
+
+        if (chosenAnswers.size() != form.getAnswerIds().size()){
+            JSONObject response = new JSONObject();
+            response.put("message", "invalid answer id(s)");
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        UserAnswer userAnswer = new UserAnswer();
+        userAnswer.setQuestion(question);
+        userAnswer.setAttempt(currentAttempt);
+        userAnswer.setAnswer(chosenAnswers);
+
+        userAnswerRepository.save(userAnswer);
+
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @PostMapping("{id}/like")
     public ResponseEntity<?> postQuizLike(@AuthenticationPrincipal String username,
                                           @PathVariable(name = "id") Long id) {
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
-
-        User user = userRepository.findUserByUsername(username).orElse(null);
+        User user = getUserByUsername(username);
         if (user == null)
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -302,10 +355,7 @@ public class QuizController {
     public ResponseEntity<?> deleteQuizLike(@AuthenticationPrincipal String username,
                                             @PathVariable(name = "id") Long id) {
 
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
-
-        User user = userRepository.findUserByUsername(username).orElse(null);
+        User user = getUserByUsername(username);
         if (user == null)
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -327,10 +377,8 @@ public class QuizController {
     @PostMapping("{id}/dislike")
     public ResponseEntity<?> postQuizDislike(@AuthenticationPrincipal String username,
                                              @PathVariable(name = "id") Long id) {
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
 
-        User user = userRepository.findUserByUsername(username).orElse(null);
+        User user = getUserByUsername(username);
         if (user == null)
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -354,10 +402,7 @@ public class QuizController {
     public ResponseEntity<?> deleteQuizDislike(@AuthenticationPrincipal String username,
                                                @PathVariable(name = "id") Long id) {
 
-        if (username == null)
-            return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
-
-        User user = userRepository.findUserByUsername(username).orElse(null);
+        User user = getUserByUsername(username);
         if (user == null)
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -380,11 +425,73 @@ public class QuizController {
     public ResponseEntity<?> postQuizRate(@PathVariable(name = "id") Long id,
                                           @RequestParam(name = "action") String action,
                                           @AuthenticationPrincipal String username){
-        if (!action.equals("like") && !action.equals("dislike"))
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        User user = getUserByUsername(username);
+        if (user == null)
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
 
-        // TODO replacement for {id}/like {id}/dislike
+
+        if (!action.equals("like") && !action.equals("dislike")){
+
+            JSONObject response = new JSONObject();
+            response.put("error_message", "incorrect action. valid actions are: 'like', 'dislike'");
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+
+        Quiz quiz = quizRepository.findById(id).orElse(null);
+        if (quiz == null)
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
+        if (quiz.userAssessed(user)){
+            JSONObject response = new JSONObject();
+            response.put("message", "rate is set");
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        }
+
+        if (action.equals("like")){
+            quiz.addUserLike(user);
+        }
+        else { // dislike
+            quiz.addUserDislike(user);
+        }
+
+        quizRepository.save(quiz);
 
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
+
+    // супер сомнительный метод
+    @DeleteMapping("{id}/rate")
+    public ResponseEntity<?> deleteQuizRate(@PathVariable(name = "id") Long id,
+                                            @RequestParam(name = "action") String action,
+                                            @AuthenticationPrincipal String username){
+        User user = getUserByUsername(username);
+        if (user == null)
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+
+        if (!action.equals("like") && !action.equals("dislike")){
+            JSONObject response = new JSONObject();
+            response.put("error_message", "incorrect action. valid actions are: 'like', 'dislike'");
+            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        Quiz quiz = quizRepository.findById(id).orElse(null);
+        if (quiz == null)
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
+        if (action.equals("like") && quiz.deleteUserLiked(user) || action.equals("dislike") && quiz.deleteUserDisliked(user)  ) {
+            quizRepository.save(quiz);
+            return new ResponseEntity<>(HttpStatus.OK);
+        }
+
+        JSONObject response = new JSONObject();
+        response.put("message", "rate wasn't set");
+        return new ResponseEntity<>(response, HttpStatus.NO_CONTENT);
+    }
+
+
+    private Attempt getPendingAttemptForUser(User user){
+        return user.getAttempts().stream().filter(a -> !a.getIsFinished()).findFirst().orElse(null);
+    }
+
 }

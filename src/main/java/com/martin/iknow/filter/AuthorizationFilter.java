@@ -55,7 +55,6 @@ public class AuthorizationFilter extends BasicAuthenticationFilter {
         if (token != null){
             token = token.split(" ")[1];
             String username = Jwts.parser().setSigningKey(hmacKey).parseClaimsJws(token).getBody().getSubject();
-//            String username = claims.get("username", String.class);
 
             if (username != null){
                 return new UsernamePasswordAuthenticationToken(username, null, new ArrayList<>());

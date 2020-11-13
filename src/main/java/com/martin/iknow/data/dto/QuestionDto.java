@@ -1,12 +1,13 @@
 package com.martin.iknow.data.dto;
 
 import com.martin.iknow.data.model.Question;
+import lombok.Data;
 import lombok.Getter;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Getter
+@Data
 public class QuestionDto {
 
     private Long id;

@@ -1,9 +1,10 @@
 package com.martin.iknow.data.dto;
 
 import com.martin.iknow.data.model.Answer;
+import lombok.Data;
 import lombok.Getter;
 
-@Getter
+@Data
 public class AnswerDto {
 
     private Long id;
